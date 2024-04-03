@@ -84,7 +84,7 @@ scopus_data_df %>%
 
 
 ```{r}
-fs::dir_ls('data/', glob = '*Scopus-Journal__*.csv') %>% 
+fs::dir_ls(here('data/'), glob = '*Scopus-Journal__*.csv') %>% 
   map_dfr(read_scopus_csv, .id = 'journal') %>% 
   mutate(journal = str_replace(journal, '.*-Journal__(.*)\\.csv', '\\1')) %>% 
   separate_wider_delim(cols = journal, delim = '__', names = c('journal', 'topic')) %>% 
