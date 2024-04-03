@@ -1,0 +1,201 @@
+---
+title: "Why we don't teach, and why we should and could teach, Bayesian methods"
+author: |
+  | Mark Andrews
+  |
+  | \faEnvelopeO \  \texttt{mark.andrews@ntu.ac.uk}
+  |
+  | Department of Psychology, Nottingham Trent University
+  | \faTwitter\  \href{https://twitter.com/xmjandrews}{@xmjandrews}
+fontsize: 10pt
+output:
+ beamer_presentation:
+  keep_tex: false
+  fonttheme: "serif"
+  includes:
+   in_header: preamble.tex
+editor_options: 
+  chunk_output_type: console
+bibliography: refs.bib
+csl: apa.csl
+---
+
+```{r, echo=F}
+knitr::opts_chunk$set(echo = F, prompt = F, warning = F, message = F, comment='#>')
+# Thanks to 
+# https://github.com/ramnathv/slidify/issues/189#issuecomment-15850008
+hook1 <- function(x){ gsub("```\n*```r*\n*", "", x) }
+hook2 <- function(x){ gsub("```\n+```\n", "", x) }
+knitr::knit_hooks$set(document = hook1)
+```
+
+```{r}
+library(tidyverse)
+library(here)
+library(brms)
+library(broom)
+load(here('slides/demo.Rda'))
+theme_set(theme_classic())
+
+set.seed(10102)
+
+# Read in Scopus data files -----------------------------------------------
+read_scopus_csv <- function(path){
+  read_csv(
+    here(path), 
+    skip = 8,
+    col_names = c('year', 'count')
+  )
+}
+
+scopus_data_df <- 
+  map_dfr(fs::dir_ls(here('data'), glob = '*Scopus-Bayesian-*'), 
+          read_scopus_csv, 
+          .id = 'topic') %>% 
+  mutate(topic = str_replace(topic, '.*-Bayesian-(.*)\\.csv', '\\1')) %>% 
+  filter(year <= 2023) %>% 
+  mutate(topic = case_when(
+    topic == 'all' ~ 'All',
+    topic == 'Computational' ~ 'Computer science',
+    topic == 'Environmental' ~ 'Environmental science',
+    topic == 'Social' ~ 'Social sciences',
+    TRUE ~ topic
+  ))
+```
+
+# The Rise of Bayesian Data Analysis
+\framesubtitle{Number of publications per year 1960-2023 with "Bayesian" in title, abstract, or keywords (Scopus)}
+
+```{r}
+scopus_data_df %>% 
+  ggplot(
+    mapping = aes(x = year, y = count, colour = topic)
+  ) + geom_point() + geom_line() +
+  facet_wrap(~topic, scales = 'free_y') +
+  theme_minimal() +
+  theme(legend.position = 'None')
+
+
+```
+
+
+# The Rise of Bayesian Data Analysis
+\framesubtitle{Proportion of publications in selected journals with "Bayesian" in title, abstract, or keywords (Scopus)}
+
+
+```{r}
+fs::dir_ls('data/', glob = '*Scopus-Journal__*.csv') %>% 
+  map_dfr(read_scopus_csv, .id = 'journal') %>% 
+  mutate(journal = str_replace(journal, '.*-Journal__(.*)\\.csv', '\\1')) %>% 
+  separate_wider_delim(cols = journal, delim = '__', names = c('journal', 'topic')) %>% 
+  filter(year != 2024, year >= 1960) %>% 
+  pivot_wider(names_from = topic, values_from = count, values_fill = 0) %>% 
+  mutate(p = Bayesian/All) %>% 
+  # seems like JMLR only had two entries for 2023 in Scopus. Strange.
+   filter(journal %in% c('Statistical-Methods-Medical-Research',
+                        'Psychometrika',
+                        'MathPsych',
+                        'Statistical_Science',
+                        'JRSSA', 'JASA', 'Psychological_Methods', 'Statistics-in-Medicine')) %>%
+  mutate(journal = case_when(
+    journal == 'JASA' ~ 'J. of the Amer. Stat. Assoc.',
+    journal == 'JMLR' ~ 'J. of Machine Learning Research',
+    journal == 'JRSSA' ~ 'J. of RSS (A)',
+    journal == 'MathPsych' ~ 'J. of Math. Psych.',
+    journal == 'Journal-of-Econometrics' ~ 'J. of Econometrics',
+    TRUE ~ journal)
+  ) %>% 
+  mutate(journal = str_replace_all(journal, regex('[-_]'), ' ')) %>% 
+  ggplot(aes(x = year, y = p)) +
+  geom_point() +
+  stat_smooth(se = FALSE) +
+  facet_wrap(~journal, scales = 'free_x', ncol = 4) + ylim(0, 0.3) +
+  geom_hline(yintercept = 0.2, colour = 'red', alpha= 0.5, linetype='dashed') +
+  theme_minimal()
+```
+
+# Why Bayes? Why now?
+
+* Bayesian methods can be automatically applied to (almost) any statistical model.
+* For any statistical model, if we can evaluate the function
+$$
+f(\theta) \triangleq \underbrace{\mathrm{P}(\textrm{data} \vert \theta)}_{\textrm{likelihood}} \underbrace{\mathrm{P}(\theta)}_{\textrm{prior}},
+$$
+then we can use Markov Chain Monte Carlo (MCMC) to draw samples from the posterior distribution $\mathrm{P}(\theta \vert \textrm{data})$.
+* Exponentially increasing computational power have exponentially decreased the cost of using Bayesian methods.
+
+# Typical statistics teaching curriculum
+\framesubtitle{Very rough approximation}
+
+* Across many fields, the core or foundational statistics topics are usually approximately:
+  * Descriptive statistics, exploring data
+  * Populations, samples, normal distributions
+  * Hypothesis testing, p-values, significance, confidence intervals
+  * Regression etc
+  * Anova etc
+* This is almost always exclusively based on frequentist inference.
+
+
+# Why not teach Bayes? Possible Reason 1
+
+* Bayesian and frequentist approaches seem fundamentally incompatible:
+  * *\ldots (Bayesian inference) is founded upon an error, and must be wholly rejected* [@fisher:methodsforresearch, p. 10]
+  * *\ldots the only good statistics statistics is Bayesian statistics ...* [@lindley1975, p. 106].
+* Bayesian methods seem to require the complete rejection of p-values, significance, confidence intervals etc., and vice versa.
+* *Possible rebuttal*: Frequentist and Bayesian inference are both reasonable methods of statistical inference.
+
+# Why not teach Bayes? Possible Reason 2
+
+* Bayesian methods are traditionally seen as requiring a *subjectivist* interpretation of probability and statistics.
+* Accordingly, probabilities represent degrees of belief and Bayes' theorem is used to update degrees of belief in light of new evidence.
+* *Possible rebuttal*: Priors are just model assumptions. Both frequentist and Bayesian inference is based on deductions from assumptions and data.
+
+# Why not teach Bayes? Possible Reason 3
+
+* Bayesian inference is too technical, e.g. Bayesian linear regression:
+\begin{align*}
+\begin{split}
+\rho(\boldsymbol\beta,\sigma^2\mid\mathbf{y},\mathbf{X}) 
+& \propto \rho(\mathbf{y}\mid\mathbf{X},\boldsymbol\beta,\sigma^2)\rho(\boldsymbol\beta\mid\sigma^2)\rho(\sigma^2) \\
+& \propto (\sigma^2)^{-n/2} \exp\left(-\frac{1}{2{\sigma}^2}(\mathbf{y}- \mathbf{X} \boldsymbol\beta)^\mathsf{T}(\mathbf{y}- \mathbf{X} \boldsymbol\beta)\right) \\
+& \phantom{\propto}\times (\sigma^2)^{-k/2} \exp\left(-\frac{1}{2\sigma^2}(\boldsymbol\beta -\boldsymbol\mu_0)^\mathsf{T} \boldsymbol\Lambda_0 (\boldsymbol\beta - \boldsymbol\mu_0)\right)\\
+& \phantom{\propto}\times (\sigma^2)^{-(a_0+1)} \exp\left(-\frac{b_0}{\sigma^2}\right)
+\end{split}
+\end{align*}
+* *Possible rebuttal*: Deriving formulas for even a t-test is just as technical. 
+
+# Why not teach Bayes? Possible Reason 4
+
+* Bayesian methods are still the minority approach.
+* *Possible rebuttal*: See George Cobb's remark about the circularity of teaching and practice: *We teach it because it's what we do; we do it because it's what we teach.* [see @wasserstein2016asa].
+
+# Why not teach Bayes? Possible Reason 5
+
+* Bayesian and frequentist methods lead to same(ish) results:
+```{r, echo=TRUE, eval=FALSE, indent = '    '}
+M <- lm(dist ~ speed, data = cars)
+Mb <- brm(dist ~ speed, data = cars)
+```
+
+\footnotesize
+```{r,echo=TRUE}
+tidy(M, conf.int = T)
+fixef(Mb) %>% round(2)
+```
+\normalsize
+
+* *Possible rebuttal*: Bayesian methods can be used where there are no frequentist options.
+
+
+# Should we teach Bayesian methods?
+\framesubtitle{If so, how?}
+
+* It depends on course topic, learning outcomes, available time, etc.
+  * *Personal example 1*: The core statistics modules for BSc Psychology degree ($\approx$ 60 hrs). Here, covering Bayesian methods exclusively, or covering both approaches, would be impractical.
+  * *Personal example 2*: An optional advanced statistical module in a BSc degree (40 hrs). Here, we begin with Bayesian and frequentist statistical inference, and then cover general, generalized and mixed effects models using both approaches.
+  * *Personal example 3*: A foundational statistics module in a data science MSc degree (40 hrs). Same approach as example 2.
+
+
+# References
+
+
